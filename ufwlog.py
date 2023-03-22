@@ -78,10 +78,14 @@ def _process(proc_data: List[JSONDictType]) -> List[JSONDictType]:
     return proc_data
 def Convert(lst):
     try:
-        res_dct = {}
+        res_dct = { "type": "" }
         for field in lst:
             split_field = field.split("=")
             if len(split_field) != 2:
+                if(field.startswith("[") or field.endswith("]")):
+                    res_dct["type"] = (res_dct["type"] + " " + field.replace('[', '').replace(']', '')).lstrip()
+                else:
+                    res_dct[field] = ""
                 continue
             label = split_field[0]
             value = split_field[1]
