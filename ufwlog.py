@@ -36,7 +36,7 @@ Examples:
 from typing import List, Dict
 from jc.jc_types import JSONDictType
 import jc.utils
-
+import json
 
 class info():
     """Provides parser metadata (version, author, etc.)"""
@@ -125,8 +125,21 @@ def parse(
             # and jc.parsers.universal
             try:
                 # print(line.split(" "))
-                raw_output.append(Convert(line.split(" ")))
+                if(not is_json(line)):
+                    raw_output.append(Convert(line.split(" ")))
+                else:
+                    json_output = json.loads(line)
+                    json_output['message'] = Convert(json_output['message'].split(" "))
+                    raw_output.append(json_output)
             except Exception as e: print(e)
             pass
 
     return raw_output if raw else _process(raw_output)
+
+# create a function to test if string is a valid json  
+def is_json(myjson):  
+    try:  
+        json_object = json.loads(myjson)  
+    except ValueError as e:  
+        return False  
+    return True
