@@ -129,13 +129,20 @@ def parse(
                     raw_output.append(Convert(line.split(" ")))
                 else:
                     json_output = json.loads(line)
-                    json_output['message'] = Convert(json_output['message'].split(" "))
-                    json_output['message']['time'] = json_output['time']
+                    # print(line)
+                    json_output['MESSAGE'] = Convert(json_output['MESSAGE'].split(" "))
+                    json_output['MESSAGE']['time'] = convert_time(json_output['__REALTIME_TIMESTAMP'])
                     raw_output.append(json_output)
             except Exception as e: print(e)
             pass
 
     return raw_output if raw else _process(raw_output)
+
+# create a function to convert real time timestamp string to human readable time
+def convert_time(time):
+    # print(time)
+    import datetime
+    return datetime.datetime.fromtimestamp(int(time) / 1e6).astimezone().isoformat()
 
 # create a function to test if string is a valid json  
 def is_json(myjson):  
