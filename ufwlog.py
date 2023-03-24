@@ -130,6 +130,7 @@ def parse(
                 else:
                     json_output = json.loads(line)
                     json_output['message'] = Convert(json_output['message'].split(" "))
+                    json_output['message']['time'] = json_output['time']
                     raw_output.append(json_output)
             except Exception as e: print(e)
             pass
