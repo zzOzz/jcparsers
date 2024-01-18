@@ -273,7 +273,8 @@ r'''
                 # print(line)
                 # print(clf_match.groupdict())
                 if clf_match:
-                    output_line = output_line | clf_match.groupdict()
+                    # output_line = output_line | clf_match.groupdict()
+                    output_line = { **output_line , ** clf_match.groupdict()}
                 # print(json.dumps(output_line,indent=4))
                 # print(pattern)
                 # print(line)
