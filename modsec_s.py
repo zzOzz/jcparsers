@@ -86,7 +86,7 @@ from jc.streaming import (
 )
 from jc.jc_types import JSONDictType, StreamingOutputType
 from jc.exceptions import ParseError
-
+import json
 
 class info():
     """Provides parser metadata (version, author, etc.)"""
@@ -198,41 +198,61 @@ def parse(
 
     # Exemple (format par défaut pour les MPMs threadés)
     # ErrorLogFormat "[%{u}t] [%-m:%l] [pid %P:tid %T] %7F: %E: [client\ %a] %M% ,\ referer\ %{Referer}i"
-    clf_pattern = re.compile(r'''
-                                ^\[(?P<date>
-                                    (?P<day_of_week>\S\S\S)[ ]
-                                    (?P<month>\S\S\S)[ ]
-                                    (?P<day>\d\d)[ ]
-                                    (?P<hour>\d\d)[:]
-                                    (?P<minute>\d\d)[:]
-                                    (?P<second>\d+\.\d+)[ ]
-                                    (?P<year>\d\d\d\d)
-                                )
-                                \][ ]
-                                \[(?P<loglevel>\S+)\][ ]
-                                \[pid[ ](?P<pid>\d+)\][ ]
-                                \[client[ ](?P<client_port>\S+)\][ ]
-                                \[client[ ](?P<client>\S+)\][ ]
-                                (?P<msg_detail>[^\[]*)[ ]
-                                (\[file[ ]"(?P<file>[@A-Za-z0-9_\./\\-]*)"\][ ])?
-                                (\[line[ ]"(?P<line>[@A-Za-z0-9_\./\\-]*)"\][ ])?
-                                (\[id[ ]"(?P<id>[@A-Za-z0-9_\./\\-]*)"\][ ])?
-                                (\[msg[ ]"(?P<msg>[^\[]*)"\][ ])?
-                                (\[data[ ]"(?P<data>[^\[]*)[ ])?
-                                (\[severity[ ]"(?P<severity>[^\[]*)"\][ ])?
-                                (\[ver[ ]"(?P<ver>[^\[]*)"\][ ])?
-                                (?P<tags>(\[tag[ ]([^\[]*))+)?
-                                (\[hostname[ ]"(?P<hostname>[^\[]*)"\][ ])?
-                                (\[uri[ ]"(?P<uri>[^\[]*)"\][ ])?
-                                (\[unique_id[ ]"(?P<unique_id>[^\[]*)"\])?
-                                (?P<extra>.*)
-                                ''', re.VERBOSE)
-    request_pattern = re.compile(r'''
-        (?P<request_method>\S+)\s
-        (?P<request_url>.*?(?=\sHTTPS?/|$))\s?  # positive lookahead for HTTP(S)/ or end of string
-        (?P<request_version>HTTPS?/[\d\.]+)?
-    ''', re.VERBOSE
-    )
+    patterns = [
+            r'''
+^.*\[client[ ](\S+)\][ ](?P<msg_detail>[^\[]*)[ ](?P<fuck>\[\S\S+)
+            ''',
+            r'''
+^\[(?P<date>
+(?P<day_of_week>\S\S\S)[ ]
+(?P<month>\S\S\S)[ ]
+(?P<day>\d\d)[ ]
+(?P<hour>\d\d)[:]
+(?P<minute>\d\d)[:]
+(?P<second>\d+\.\d+)[ ]
+(?P<year>\d\d\d\d)
+)
+\][ ]
+\[(?P<loglevel>\S+)\][ ]
+\[pid[ ](?P<pid>\d+)\][ ]
+\[client[ ](?P<client_port>\S+)\][ ]
+\[client[ ](?P<client>\S+)\][ ]
+            ''',
+r'''
+^.*(\[file[ ]"(?P<file>[@A-Za-z0-9_\./\\-]*)"\][ ])
+''',
+r'''
+^.*(\[line[ ]"(?P<line>[@A-Za-z0-9_\./\\-]*)"\][ ])
+''',
+r'''
+^.*(\[id[ ]"(?P<id>\d+)"\][ ])
+''',
+r'''
+^.*(\[msg[ ]"(?P<msg>[^\[]*)"\][ ])
+''',
+r'''
+^.*(\[data[ ]"(?P<data>[^\[]*)[ ])
+''',
+r'''
+^.*(\[severity[ ]"(?P<severity>[^\[]*)"\][ ])
+''',
+r'''
+^.*(\[ver[ ]"(?P<ver>[^\[]*)"\][ ])
+''',
+r'''
+^.*(\[hostname[ ]"(?P<hostname>[^\[]*)"\][ ])
+''',
+r'''
+^.*(\[uri[ ]"(?P<uri>[^\[]*)"\][ ])
+''',
+r'''
+^.*(\[unique_id[ ]"(?P<unique_id>[^\[]*)"\])
+''',
+r'''
+^.*(?P<tags>(\[tag[ ]([^\[]*))+)
+'''
+            ]
+
 
     for line in data:
         try:
@@ -241,31 +261,35 @@ def parse(
             if not line.strip():
                 continue
             # TEST_DATA="""[Mon Jan 08 15:39:55.735479 2024] [:error] [pid 3426173] [client 90.65.66.20:56764] [client 90.65.66.20] ModSecurity: Warning. Invalid URL Encoding: Non-hexadecimal digits used at REQUEST_BODY. [file "/usr/share/modsecurity-crs/rules/REQUEST-920-PROTOCOL-ENFORCEMENT.conf"] [line "364"] [id "920240"] [msg "URL Encoding Abuse Attack Attempt"] [data "\\x00\\x00\\x00\\x18ftypmp42\\x00\\x00\\x00\\x00mp42mp41\\x00\\x00\\xf3\\xd7moov\\x00\\x00\\x00lmvhd\\x00\\x00\\x00\\x00\\xe1\\xc1\\xb4\\xd1\\xe1\\xc1\\xb4\\xe9\\x00\\x01_\\x90\\x00\\x9a\\x03\\x80\\x00\\x01\\x00\\x00\\x01\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x01\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x01\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00@\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x03\\x00\\x00\\x93\\xf3trak\\x00\\x00\\x..."] [severity "WARNING"] [ver "OWASP_CRS/3.2.0"] [tag "application-multi"] [tag "language-multi"] [tag "platform-multi"] [tag "attack-protocol"] [tag "paranoia-level/1"] [tag "OWASP_CRS"] [tag "OWASP_CRS/PROTOCOL_VIOLATION/EVASION"] [hostname "nextcloud.msh-lse.fr"] [uri "/remote.php/dav/uploads/christian.dury@cnrs.fr/web-file-upload-c966aa5744d68523/1"] [unique_id "ZZwJNqT4GaedrCMW56VQ3QAAAB0"]"""
+            apache_dict = { 'raw': line.strip()}
+            for pattern in patterns:
+                clf_pattern = re.compile(pattern, re.VERBOSE)
+                clf_match = re.match(clf_pattern, line)
+                # print(line.strip())
+                # print('fuck')
+                # print(TEST_DATA)
+                # print('fuck')
+                # output_line = clf_match.groupdict()
+                # print(line)
+                # print(clf_match.groupdict())
+                if clf_match:
+                    output_line = output_line | clf_match.groupdict()
+                # print(json.dumps(output_line,indent=4))
+                # print(pattern)
+                # print(line)
+                #     if output_line.get('request', None):
+                #         request_string = output_line['request']
+                #         request_match = re.match(request_pattern, request_string)
+                #         if request_match:
+                #              output_line.update(request_match.groupdict())
 
-            clf_match = re.match(clf_pattern, line)
-            # print(line.strip())
-            # print('fuck')
-            # print(TEST_DATA)
-            # print('fuck')
-            # output_line = clf_match.groupdict()
-            # print(line)
-            # print(clf_match.groupdict())
-            if clf_match:
-                output_line = clf_match.groupdict()
-
-            #     if output_line.get('request', None):
-            #         request_string = output_line['request']
-            #         request_match = re.match(request_pattern, request_string)
-            #         if request_match:
-            #              output_line.update(request_match.groupdict())
-
-            else:
-                output_line = {"unparsable": line.strip()}
-
-            if output_line:
-                yield output_line if raw else _process(output_line)
-            else:
-                raise ParseError('Not Common Log Format data')
+                # else:
+                #     output_line = {"unparsable": line.strip()}
+            # _process(apache_dict)
+            # if output_line:
+            yield output_line if raw else _process(output_line)
+            # else:
+                # raise ParseError('Not Common Log Format data')
 
         except Exception as e:
             print(e)
